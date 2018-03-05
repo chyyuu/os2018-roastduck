@@ -95,3 +95,77 @@ $(UCOREIMG): $(kernel) $(bootblock)
 ### 2. 一个被系统认为是符合规范的硬盘主引导扇区的特征是什么？
 
 如1.b所述，主引导扇区长度需为恰好512字节，并且最后两个字节为`0x55 0xAA`。
+
+## 练习2
+
+### 1. 从CPU加电后执行的第一条指令开始，单步跟踪BIOS的执行
+
+若直接执行`make debug`可以即可使用gdb调试，但第一处断点将被设置在`kern_init`而不是第一条指令。为了从第一条指令开始即单步跟踪，可以仿照Makefile中指令执行：
+
+```sh
+qemu-system-i386 -S -s -serial mon:stdio -hda bin/ucore.img -nographic
+gdb bin/kernel
+```
+
+然后在gdb中执行下述指令以开始调试
+
+```
+target remote :1234
+set arch i8086
+```
+
+正常情况下，可通过`layout regs`打开寄存器查看窗口、通过`layout asm`查看指令（需通过`fs CMD`使焦点重新回到命令输入窗口）。然而，指令窗口显示的指令地址是错误的。80368启动后执行地第一条指令位于`0xfffffff0`，但gdb误以为位于`0xfff0`。可以通过以下命令手动查看程序的第一条指令：
+
+```
+x /2i 0xfffffff0
+```
+
+结果为：
+
+```
+0xfffffff0:  ljmp   $0xf000,$0xe05b
+0xfffffff5:  xor    %dh,0x322f
+```
+
+通过`si`单步执行一条命令，此时在寄存器窗口观察到`eip`变为`0xe05b`，即跳转到`0xffffe05b`，即成功进行了跳转。
+
+### 2. 在初始化位置0x7c00设置实地址断点,测试断点正常
+
+通过`b *0x7c00`设置断点，再通过`c`恢复运行，程序即运行到`0x7c00`位置。通过指令窗口，可以查看此时待运行的指令为（`cs=0`时gdb的指令窗口显示无误）：
+
+```
+   ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+B+>│0x7c00  cli                                                                                                                       │
+   │0x7c01  cld                                                                                                                       │
+   │0x7c02  xor    %ax,%ax                                                                                                            │
+   │0x7c04  mov    %ax,%ds                                                                                                            │
+   │0x7c06  mov    %ax,%es                                                                                                            │
+   │0x7c08  mov    %ax,%ss                                                                                                            │
+   │0x7c0a  in     $0x64,%al                                                                                                          │
+   │0x7c0c  test   $0x2,%al                                                                                                           │
+   │0x7c0e  jne    0x7c0a                                                                                                             │
+   │0x7c10  mov    $0xd1,%al                                                                                                          │
+   │0x7c12  out    %al,$0x64                                                                                                          │
+   └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 3. 从0x7c00开始跟踪代码运行,将单步跟踪反汇编得到的代码与`bootasm.S`和`bootblock.asm`进行比较
+
+对比上述反汇编与`bootasm.S`和`bootblock.asm`，可以看出是一致的（不影响语义的ANSI汇编的后缀被省略了）。
+
+### 4. 自己找一个bootloader或内核中的代码位置，设置断点并进行测试
+
+通过`b kern_init`在`kern_init`函数处设置断点，然后通过`c`继续执行程序，程序即运行到`kern_init`处。通过`l`可查看此处前后的代码为：
+
+```
+12      int kern_init(void) __attribute__((noreturn));
+13      void grade_backtrace(void);
+14      static void lab1_switch_test(void);
+15
+16      int
+17      kern_init(void) {
+18          extern char edata[], end[];
+19          memset(edata, 0, end - edata);
+20
+21          cons_init();                // init the console
+```
