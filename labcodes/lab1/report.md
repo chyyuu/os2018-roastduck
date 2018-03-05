@@ -261,3 +261,67 @@ protcseg:
     movl $start, %esp
     call bootmain
 ```
+
+## 练习4
+
+`bootmain.c`中首先定义了`readsect`用于读取一个扇区：
+
+```c
+static void
+readsect(void *dst, uint32_t secno) {
+    // wait for disk to be ready
+    waitdisk();
+
+    outb(0x1F2, 1);                         // count = 1
+    outb(0x1F3, secno & 0xFF);
+    outb(0x1F4, (secno >> 8) & 0xFF);
+    outb(0x1F5, (secno >> 16) & 0xFF);
+    outb(0x1F6, ((secno >> 24) & 0xF) | 0xE0);
+    outb(0x1F7, 0x20);                      // cmd 0x20 - read sectors
+
+    // wait for disk to be ready
+    waitdisk();
+
+    // read a sector
+    insl(0x1F0, dst, SECTSIZE / 4);
+}
+```
+
+读取时，首先向`0x1f2`写入1表示读取一个扇区；然后向`0x1f3~0x1f6`写入一个32位字，其中29-31位强制设为1，28位为零表示读取主盘而非从盘，0-27位表示扇区编号；接下来向`0x1f7`写入`0x20`表示读取。待磁盘准备好数据后，从`0x1f0`连续读取要读取扇区中的数据。
+
+`bootmain.c`中将`readsect`函数进一步封装为`readseg`函数，用于从磁盘中读取连续任意长度的数据。
+
+主函数`bootmain`函数首先调用`readseg`将ELF文件的头读入`0x10000`开始的临时空间，并根据头的内容检查ELF的合法性。然后，根据头中描述的各段的偏移量和长度，反复调用`readseg`将各段读入内存中相应位置。最后，跳转到ELF头中指定的程序入口：
+
+```c
+void
+bootmain(void) {
+    // read the 1st page off disk
+    readseg((uintptr_t)ELFHDR, SECTSIZE * 8, 0);
+
+    // is this a valid ELF?
+    if (ELFHDR->e_magic != ELF_MAGIC) {
+        goto bad;
+    }
+
+    struct proghdr *ph, *eph;
+
+    // load each program segment (ignores ph flags)
+    ph = (struct proghdr *)((uintptr_t)ELFHDR + ELFHDR->e_phoff);
+    eph = ph + ELFHDR->e_phnum;
+    for (; ph < eph; ph ++) {
+        readseg(ph->p_va & 0xFFFFFF, ph->p_memsz, ph->p_offset);
+    }
+
+    // call the entry point from the ELF header
+    // note: does not return
+    ((void (*)(void))(ELFHDR->e_entry & 0xFFFFFF))();
+
+bad:
+    outw(0x8A00, 0x8A00);
+    outw(0x8A00, 0x8E00);
+
+    /* do nothing */
+    while (1);
+}
+```
