@@ -169,3 +169,95 @@ B+>│0x7c00  cli                                                               
 20
 21          cons_init();                // init the console
 ```
+
+## 练习3
+
+首先关中断，并将DF标志和各段寄存器置零：
+
+```gas
+.code16                                             # Assemble for 16-bit mode
+    cli                                             # Disable interrupts
+    cld                                             # String operations increment
+
+    # Set up the important data segment registers (DS, ES, SS).
+    xorw %ax, %ax                                   # Segment number zero
+    movw %ax, %ds                                   # -> Data Segment
+    movw %ax, %es                                   # -> Extra Segment
+    movw %ax, %ss                                   # -> Stack Segment
+```
+
+然后使能A20。由于A20是使用8042键盘控制器控制的，所以需要先通过向`0x64`写入`0xd1`以进入写模式，然后再向`0x60`写入`0xdf`以使能A20。每次写之前还需读`0x64`以等待键盘控制器准备好：
+
+```gas
+seta20.1:
+    inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).
+    testb $0x2, %al
+    jnz seta20.1
+
+    movb $0xd1, %al                                 # 0xd1 -> port 0x64
+    outb %al, $0x64                                 # 0xd1 means: write data to 8042's P2 port
+
+seta20.2:
+    inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).
+    testb $0x2, %al
+    jnz seta20.2
+
+    movb $0xdf, %al                                 # 0xdf -> port 0x60
+    outb %al, $0x60                                 # 0xdf = 11011111, means set P2's A20 bit(the 1 bit) to 1
+```
+
+然后通过`lgdt`指令加载位于bootloader中的GDT：
+
+```gas
+    lgdt gdtdesc
+```
+
+其中`gdtdesc`处存有GDT的长度和位置：
+
+```gas
+gdtdesc:
+    .word 0x17                                      # sizeof(gdt) - 1
+    .long gdt                                       # address gdt
+```
+
+GDT内容如下，偏移量`0x0`、`0x8`和`0x10`处分别为空段、代码段和数据段。代码段和数据段起始地址均为零，长度均为最大长度：
+
+```gas
+.p2align 2                                          # force 4 byte alignment
+gdt:
+    SEG_NULLASM                                     # null seg
+    SEG_ASM(STA_X|STA_R, 0x0, 0xffffffff)           # code seg for bootloader and kernel
+    SEG_ASM(STA_W, 0x0, 0xffffffff)                 # data seg for bootloader and kernel
+```
+
+然后通过将cr0寄存器PE位置1以开启保护模式：
+
+```gas
+    movl %cr0, %eax
+    orl $CR0_PE_ON, %eax
+    movl %eax, %cr0
+```
+
+接下来设置各段寄存器。其中代码段寄存器`cs`是通过跳转指令设置的，其余段寄存器是通过直接`movw`设置的。代码段被设置到GDT偏移量`0x8`的位置，而数据段被设置到GDT偏移量`0x10`的位置，与上述GDT一致。因为代码段描述符中说明了代码段中存储的是32位指令，所以跳转后切换到32位指令集：
+
+```gas
+    ljmp $PROT_MODE_CSEG, $protcseg
+
+.code32                                             # Assemble for 32-bit mode
+protcseg:
+    # Set up the protected-mode data segment registers
+    movw $PROT_MODE_DSEG, %ax                       # Our data segment selector
+    movw %ax, %ds                                   # -> DS: Data Segment
+    movw %ax, %es                                   # -> ES: Extra Segment
+    movw %ax, %fs                                   # -> FS
+    movw %ax, %gs                                   # -> GS
+    movw %ax, %ss                                   # -> SS: Stack Segment
+```
+
+最后初始化栈指针，然后调用C函数`bootmain`：
+
+```gas
+    movl $0x0, %ebp
+    movl $start, %esp
+    call bootmain
+```
