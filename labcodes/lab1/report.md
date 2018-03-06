@@ -324,4 +324,35 @@ bad:
     /* do nothing */
     while (1);
 }
+
+## 练习5
+
+实现了`print_stackframe`函数。其中，打印每一层栈帧信息时，可通过`ebp`确定栈帧位置以从中获取调用参数，并通过`eip`确定当前所调用函数的信息。打印完每层栈帧的信息后，从`ss:[ebp+4]`处即可取得上层函数旧的`eip`，从`ss:[ebp]`处即可取得旧的`ebp`，从而继续打印上层函数的栈帧，直到`ebp`指向空地址。
+
+运行结果如下：
+
 ```
+ebp:0x00007b38 eip:0x00100a28 args:0x00010094 0x00010094 0x00007b68 0x0010007f
+    kern/debug/kdebug.c:305: print_stackframe+22
+ebp:0x00007b48 eip:0x00100d04 args:0x00000000 0x00000000 0x00000000 0x00007bb8
+    kern/debug/kmonitor.c:125: mon_backtrace+10
+ebp:0x00007b68 eip:0x0010007f args:0x00000000 0x00007b90 0xffff0000 0x00007b94
+    kern/init/init.c:48: grade_backtrace2+19
+ebp:0x00007b88 eip:0x001000a1 args:0x00000000 0xffff0000 0x00007bb4 0x00000029
+    kern/init/init.c:53: grade_backtrace1+27
+ebp:0x00007ba8 eip:0x001000be args:0x00000000 0x00100000 0xffff0000 0x00100043
+    kern/init/init.c:58: grade_backtrace0+19
+ebp:0x00007bc8 eip:0x001000df args:0x00000000 0x00000000 0x00000000 0x00103280
+    kern/init/init.c:63: grade_backtrace+26
+ebp:0x00007be8 eip:0x00100050 args:0x00000000 0x00000000 0x00000000 0x00007c4f
+    kern/init/init.c:28: kern_init+79
+ebp:0x00007bf8 eip:0x00007d6e args:0xc031fcfa 0xc08ed88e 0x64e4d08e 0xfa7502a8
+    <unknow>: -- 0x00007d6d --
+```
+
+其中，打印的最后一个栈帧是`bootmain.c`中的`bootmain`函数。各参数解释如下：
+
+- `ebp = 0x7bf8`：Bootloader中初始化`ebp`为`0x7c00`，`bootmain`是栈中第一个函数，故其栈帧基地址为`0x7c00 - 4 - 4 = 0x7bf8`。减去的两个四字节分别是旧`ebp`（为空地址）和返回地址（实际上永不返回）；
+- `eip = 0x7d63`：此地址指向此栈帧中将要执行的下一条指令的地址（实际上永不执行），为`bootmain.c:110`处的`outw`；
+- 调用参数：`bootmain`函数没有参数。此处的“参数”实际上是`0x7c00`处的四个32位字，位于栈外，存储的是bootloader中第一条指令。
+
