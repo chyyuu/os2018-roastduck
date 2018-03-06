@@ -324,6 +324,7 @@ bad:
     /* do nothing */
     while (1);
 }
+```
 
 ## 练习5
 
