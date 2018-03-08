@@ -293,7 +293,7 @@ read_eip(void) {
  * */
 void
 print_stackframe(void) {
-     /* LAB1 YOUR CODE : STEP 1 */
+     /* LAB1 2015011308 : STEP 1 */
      /* (1) call read_ebp() to get the value of ebp. the type is (uint32_t);
       * (2) call read_eip() to get the value of eip. the type is (uint32_t);
       * (3) from 0 .. STACKFRAME_DEPTH
@@ -305,5 +305,13 @@ print_stackframe(void) {
       *           NOTICE: the calling funciton's return addr eip  = ss:[ebp+4]
       *                   the calling funciton's ebp = ss:[ebp]
       */
+    uint32_t ebp = read_ebp(), eip = read_eip(), *ebpPtr = NULL;
+    for (; ebp; eip = ebpPtr[1], ebp = ebpPtr[0])
+    {
+        ebpPtr = (uint32_t*)ebp;
+        cprintf("ebp:0x%08x eip:0x%08x ", ebp, eip);
+        cprintf("args:0x%08x 0x%08x 0x%08x 0x%08x\n", ebpPtr[2], ebpPtr[3], ebpPtr[4], ebpPtr[5]);
+        print_debuginfo(eip - 1);
+    }
 }
 
