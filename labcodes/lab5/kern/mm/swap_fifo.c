@@ -57,7 +57,7 @@ _fifo_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int
 }
 /*
  *  (4)_fifo_swap_out_victim: According FIFO PRA, we should unlink the  earliest arrival page in front of pra_list_head qeueue,
- *                            then set the addr of addr of this page to ptr_page.
+ *                            then assign the value of *ptr_page to the addr of this page.
  */
 static int
 _fifo_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick)
@@ -69,7 +69,7 @@ _fifo_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick
     /*LAB3 EXERCISE 2: 2015011308*/
     struct Page *page = le2page(list_next(&pra_list_head), pra_page_link);
     list_del(list_next(&pra_list_head));    //(1)  unlink the  earliest arrival page in front of pra_list_head qeueue
-    *ptr_page = page;                       //(2)  set the addr of addr of this page to ptr_page
+    *ptr_page = page;                       //(2)  assign the value of *ptr_page to the addr of this page
     return 0;
 }
 
