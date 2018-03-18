@@ -37,3 +37,26 @@
 - 若相应物理页的引用计数等于1，说明Copy on Write已经进行完毕，将页表中的写入位置1即可。
 
 当然，每次更新页表后需要刷新TLB。
+
+## 练习3
+
+本节中，我首先给出进程的执行状态生命周期图如下，然后再回答关于`fork/exec/wait/exit`的分析：
+
+```
+                                          +-- RUNNING <-+
+                                          |    proc_run |
+         alloc_proc          wakeup_proc  v proc_run    | do_wait 
+创建进程 -----------> UNINIT --------------+-> RUNNABLE -+--------> SLEEPING -+
+                                                 |   ^                       |
+                   父进程释放资源         do_exit |   |                       | wakeup_proc
+           中止进程 <----------- ZOMBIE <---------+   +-----------------------+
+```
+
+注1：第一个进程`idle`是在函数`init_proc`中手工构造的，直接进入RUNNING状态，而不遵循上述流程；
+
+注2：进程管理数据结构中并不区分RUNNING状态与RUNNABLE状态，每次`proc_run`被执行时，会切换到某个RUNNALBE的进程，使其占用CPU，此进程的状态为RUNNING状态，原来占用CPU时间的进程回到RUNNABLE状态。
+
+- `fork`（于函数`do_fork`执行）在保持当前进程运行状态为RUNNING不变的情况下，通过`alloc_proc`创建新的进程，此时新进程状态为UNINIT。`fork`对其进行初始化后，通过调用`wakeup_proc`置新的进程的运行状态为RUNNABLE；
+- `exec`（于函数`do_execve`执行）保持当前进程运行状态为RUNNING不变，只是设置进程的上下文。`exec`执行的具体事项见练习1的分析；
+- `wait`（于函数`do_wait`执行）会检查子进程的状态，若有ZOMBIE状态的子进程则释放该子进程的资源并返回，保持自身RUNNING状态不变；否则进入SLEEPING状态等待子进程唤醒，唤醒后再释放子进程资源；
+- `exit`（于函数`do_exit`执行）会释放自己的大部分资源，将所有子进程的父进程设为`init`进程，通过`wakeup_proc`唤醒SLEEPING状态的父进程（若有）进入RUNNABLE态，然后自身进入ZOMBIE态。
