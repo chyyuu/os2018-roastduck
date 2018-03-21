@@ -235,8 +235,8 @@ trap_dispatch(struct trapframe *tf) {
 	     * sched_class_proc_tick
          */
         // Updated in LAB5: `print_ticks` is deleted because this will terminate the program
-        if (++ticks % TICK_NUM == 0)
-            sched_class_proc_tick(current);
+        ticks++;
+        sched_class_proc_tick(current);
         break;
     case IRQ_OFFSET + IRQ_COM1:
         c = cons_getc();
