@@ -39,6 +39,20 @@ static struct pseudodesc idt_pd = {
     sizeof(idt) - 1, (uintptr_t)idt
 };
 
+void
+user_set_idt(int int_id, uintptr_t handler) {
+    extern uintptr_t __vectors[];
+    int i;
+    for (i = 0; i < 256; i++)
+        if (i == int_id) {
+            SETGATE(idt[i], i < IRQ_OFFSET || i == T_SYSCALL, GD_UTEXT, handler, DPL_USER);
+        } else {
+            SETGATE(idt[i], i < IRQ_OFFSET || i == T_SYSCALL, GD_KTEXT, __vectors[i], i == T_SYSCALL ? DPL_USER : DPL_KERNEL);
+        }
+    lidt(&idt_pd);
+    cprintf("New IDT loaded\n");
+}
+
 /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
 void
 idt_init(void) {

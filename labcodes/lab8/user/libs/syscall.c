@@ -143,3 +143,9 @@ int
 sys_dup(int fd1, int fd2) {
     return syscall(SYS_dup, fd1, fd2);
 }
+
+int
+sys_setvec(int int_id, uintptr_t handler) {
+    return syscall(SYS_setvec, int_id, handler);
+}
+

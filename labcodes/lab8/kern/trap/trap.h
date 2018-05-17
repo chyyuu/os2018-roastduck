@@ -80,6 +80,7 @@ struct trapframe {
     uint16_t tf_padding5;
 } __attribute__((packed));
 
+void user_set_idt(int int_id, uintptr_t handler);
 void idt_init(void);
 void print_trapframe(struct trapframe *tf);
 void print_regs(struct pushregs *regs);
